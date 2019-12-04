@@ -1,6 +1,6 @@
 variables:
   azureSubscription: Resource Manager Service Connection
-  resourcegroup: dev-ttdemo-rg1
+  resourcegroup: TailwindTradersBackend
   location: East US
   ImageName: website
 
