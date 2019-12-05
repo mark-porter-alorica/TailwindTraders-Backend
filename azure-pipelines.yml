@@ -1,38 +1,66 @@
+trigger:
+- master
+
+resources:
+- repo: self
+
 variables:
-  azureSubscription: Resource Manager Service Connection
-  resourcegroup: TailwindTradersBackend
-  location: East US
-  ImageName: website
+  # subscription: 'Dev'
+  # acrName: 'ttacrrq7ht2uk6jv44'
+  # resourceGroup: 'dev-ttdemo-rg1'
+  deployfrom: 'Deploy'
 
-steps:
-- task: AzureResourceGroupDeployment@2
-  displayName: Azure Deployment
-  inputs:
-    azureSubscription: $(azureSubscription)
-    resourceGroupName: $(resourcegroup)
-    location: $(location)
-    csmFile: Deploy/deployment.json
-
-- task: keesschollaart.arm-outputs.arm-outputs.ARM Outputs@5
-  displayName: ARM Outputs
-  inputs:
-    ConnectedServiceNameARM: $(azureSubscription)
-    resourceGroupName: $(resourcegroup)
-
-- task: Docker@1
-  displayName: 'Build an image'
-  inputs:
-    azureSubscriptionEndpoint: $(azureSubscription)
-    azureContainerRegistry: $(acr).azurecr.io
-    dockerFile: Source/Tailwind.Traders.Web/Dockerfile
-    arguments: '-t $(acr).azurecr.io/$(ImageName):$(Build.BuildId)'
-    imageName: '$(ImageName):$(Build.BuildId)'
-    includeLatestTag: true
-
-- task: Docker@1
-  displayName: 'Push Image'
-  inputs:
-    azureSubscriptionEndpoint: $(azureSubscription)
-    azureContainerRegistry: '$(acr).azurecr.io'
-    command: 'Push an image'
-    imageName: '$(ImageName):$(Build.BuildId)'
+jobs:
+- job: Deploy_Scripts
+  pool:
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - task: CopyFiles@2
+    displayName: Copy release scripts
+    inputs:
+      SourceFolder: '$(deployfrom)'
+      Contents: '**'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)'
+  - task: PublishBuildArtifacts@1
+    displayName: Publish scripts artifact
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'deploy'
+      publishLocation: 'Container'
+- job: Build_Linux
+  pool:
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - task: AzureCLI@1
+    displayName: Build and Push to ACR 
+    inputs:
+      azureSubscription: '$(subscription)'
+      scriptLocation: 'inlineScript'
+      inlineScript: 'pwsh -File Build-Push.ps1 -resourceGroup $(resourceGroup) -acrName $(acrName) -dockerTag $(Build.BuildId)'
+      addSpnToEnvironment: true
+      useGlobalConfig: true
+      workingDirectory: 'Deploy/powershell'
+- job: Build_Windows
+  pool:
+    vmImage: 'windows-2019'
+  steps:
+  - task: NuGetCommand@2
+    inputs:
+      command: 'restore'
+      restoreSolution: '**/Tailwind.Traders.Backend.Rewards.sln'
+      feedsToUse: 'select'
+  - task: MSBuild@1
+    inputs:
+      solution: '**/Tailwind.Traders.Rewards.Registration.Api.csproj'
+      msbuildArchitecture: 'x64'
+      msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=FolderProfile.pubxml'
+      clean: true
+  - task: AzureCLI@1
+    displayName: Build and Push to ACR 
+    inputs:
+      azureSubscription: '$(subscription)'
+      scriptLocation: 'inlineScript'
+      inlineScript: 'pwsh -Command .\Build-Push.ps1 -resourceGroup $(resourceGroup) -acrName $(acrName) -dockerTag $(Build.BuildId) -isWindowsMachine 1'
+      addSpnToEnvironment: true
+      useGlobalConfig: true
+      workingDirectory: 'Deploy\powershell'
