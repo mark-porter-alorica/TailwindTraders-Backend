@@ -5,9 +5,9 @@ resources:
 - repo: self
 
 variables:
-  # subscription: 'Dev'
-  # acrName: 'ttacrrq7ht2uk6jv44'
-  # resourceGroup: 'dev-ttdemo-rg1'
+  subscription: Resource Manager Service Connection
+  acrName: ttacrrq7ht2uk6jv44
+  resourceGroup: dev-ttdemo-rg1
   deployfrom: 'Deploy'
 
 jobs:
